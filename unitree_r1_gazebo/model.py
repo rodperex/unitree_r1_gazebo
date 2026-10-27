@@ -34,6 +34,7 @@ which carry the camera) and the arms. The head carries an RGB-D camera.
     ros2 run unitree_r1_gazebo fetch_r1_model        # downloads the model (once)
 """
 
+import math
 import os
 import re
 import urllib.request
@@ -64,7 +65,17 @@ COLOURS = {
     'shell': (0.82, 0.83, 0.85),
     'joint': (0.18, 0.19, 0.21),
     'black': (0.05, 0.05, 0.06),
+    'eyes': (0.15, 0.75, 1.0),    # the lights of the eyes, and a stripe on the head
 }
+# Details that the meshes have in one piece with the head (head_yaw_link): the eyes, a disc on each
+# lens of the visor (inside the near clip of the camera: it does not see them), and a stripe along
+# the top of the head, in pieces that follow its curve. Positions in the frame of the head (m),
+# measured on the mesh: the lenses, and the height of the top along x
+EYES = {'radius': 0.008, 'depth': 0.003, 'x': 0.0848, 'y': 0.025, 'z': -0.024}
+CREST_PROFILE = [(-0.05, 0.0467), (-0.04, 0.0558), (-0.03, 0.0604), (-0.02, 0.0644), (-0.01, 0.0675),
+                 (0.00, 0.0688), (0.01, 0.0689), (0.02, 0.0686), (0.03, 0.0666), (0.04, 0.0631),
+                 (0.05, 0.0580), (0.06, 0.0539)]
+CREST_WIDTH, CREST_THICKNESS = 0.02, 0.003
 PART_COLOURS = [
     ('camera_link', 'black'), ('imu', 'joint'),
     ('left_ankle_roll', 'black'), ('right_ankle_roll', 'black'),
@@ -127,6 +138,21 @@ def _robot(model_dir):
                 visual.remove(material)
             material = _element(visual, 'material', name=f'r1_{colour}')
             _element(material, 'color', rgba='{} {} {} 1'.format(*COLOURS[colour]))
+    head = next(link for link in robot.findall('link') if link.get('name') == 'head_yaw_link')
+    eye = ('cylinder', {'radius': EYES['radius'], 'length': EYES['depth']})
+    details = [('left_eye', eye, (EYES['x'], EYES['y'], EYES['z']), (0, math.pi / 2, 0)),
+               ('right_eye', eye, (EYES['x'], -EYES['y'], EYES['z']), (0, math.pi / 2, 0))]
+    for k, ((x0, z0), (x1, z1)) in enumerate(zip(CREST_PROFILE, CREST_PROFILE[1:])):
+        # A piece between two points of the top, tilted as the head there, half sunk into it
+        length = math.hypot(x1 - x0, z1 - z0)
+        details.append((f'crest_{k}', ('box', {'size': f'{length + 0.002} {CREST_WIDTH} {CREST_THICKNESS}'}),
+                        ((x0 + x1) / 2, 0, (z0 + z1) / 2), (0, -math.atan2(z1 - z0, x1 - x0), 0)))
+    for name, geometry, xyz, rpy in details:
+        visual = _element(head, 'visual', name=name)
+        _element(visual, 'origin', xyz='{} {} {}'.format(*xyz), rpy='{} {} {}'.format(*rpy))
+        _element(_element(visual, 'geometry'), geometry[0], **geometry[1])
+        material = _element(visual, 'material', name='r1_eyes')
+        _element(material, 'color', rgba='{} {} {} 1'.format(*COLOURS['eyes']))
     _element(robot, 'link', name='base_link')
     pelvis = _element(robot, 'joint', name='base_to_pelvis_joint', type='fixed')
     _element(pelvis, 'origin', xyz=f'0 0 {PELVIS_HEIGHT}', rpy='0 0 0')
