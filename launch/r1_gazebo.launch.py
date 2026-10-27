@@ -29,7 +29,9 @@ import tempfile
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction,
+                            RegisterEventHandler)
+from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -52,6 +54,16 @@ def world_file(world, headless):
   return sdf
 
 
+def remove_on_shutdown(path):
+  """The generated world deleted when the launch ends: nothing left behind in /tmp."""
+  def remove(event, context):
+    try:
+      os.remove(path)
+    except OSError:
+      pass
+  return RegisterEventHandler(OnShutdown(on_shutdown=remove))
+
+
 def launch_setup(context):
   def arg(name):
     return LaunchConfiguration(name).perform(context)
@@ -63,10 +75,12 @@ def launch_setup(context):
             f'/{name}/camera/depth_image': ('sensor_msgs/msg/Image', 'gz.msgs.Image'),
             f'/{name}/camera/camera_info': ('sensor_msgs/msg/CameraInfo', 'gz.msgs.CameraInfo')}
   sdk = ['--name', name, '--interface', arg('sdk_interface'), '--domain', arg('sdk_domain')]
+  sdf = world_file(arg('world'), headless)
   actions = [
+    remove_on_shutdown(sdf),
     IncludeLaunchDescription(
       PythonLaunchDescriptionSource(gz_sim),
-      launch_arguments={'gz_args': f'-r -s {world_file(arg("world"), headless)}'}.items()),
+      launch_arguments={'gz_args': f'-r -s {sdf}'}.items()),
     Node(package='ros_gz_sim', executable='create', output='screen',
          arguments=['-string', model.simulation_urdf(name=name), '-name', name,
                     '-x', arg('x'), '-y', arg('y'), '-z', '0', '-Y', arg('yaw')]),
