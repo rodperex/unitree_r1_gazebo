@@ -84,10 +84,16 @@ no-build-isolation = ["cyclonedds"]
 dependency-overrides = { cyclonedds = "==0.10.5" }
 ```
 
-The installed SDK lacks its R1 package (`unitree_sdk2py/r1` has no `__init__.py`, so its
-`setup.py` leaves it out). This package brings the R1 locomotion client, Unitree's code (BSD-3,
-`LICENSE.unitree`): `from unitree_r1_gazebo.r1_loco import LocoClient`; it is the SDK's own when
-the SDK has it.
+The installed SDK lacks two things that its `setup.py` leaves out (they are in its repository):
+
+- its R1 package (`unitree_sdk2py/r1` has no `__init__.py`). This package brings the R1
+  locomotion client, Unitree's code (BSD-3, `LICENSE.unitree`): `from unitree_r1_gazebo.r1_loco
+  import LocoClient`; it is the SDK's own when the SDK has it.
+- the compiled library of the CRC of the low-level messages (`utils/lib/crc_amd64.so`).
+  `unitree_r1_gazebo.crc.crc_function()` gives the SDK's CRC: with that library when it is there,
+  otherwise with the SDK's own pure-Python CRC (the same value, about 2 ms per message). The
+  simulation sets the CRC of `rt/lowstate` (100 Hz) only with the compiled library, and 0
+  otherwise: nothing in the simulation checks it.
 
 **The model** of the R1 (Unitree's URDF and meshes, `unitree_ros`, BSD-3) is downloaded the first
 time, at a fixed commit, into `~/.cache/unitree_r1_gazebo`; `ros2 run unitree_r1_gazebo

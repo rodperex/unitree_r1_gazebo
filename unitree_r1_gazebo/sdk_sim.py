@@ -36,6 +36,7 @@ import math
 import threading
 import time
 
+from unitree_r1_gazebo.crc import crc_function
 from unitree_r1_gazebo.joints import ARM_SDK, BASE_X, BASE_Y, BODY_YAW, INDEX, MOTORS
 
 # Locomotion states (SetFsmId) in which the robot walks: Start (locomotion mode)
@@ -109,13 +110,13 @@ class R1SdkSim:
             ROBOT_API_ID_LOCO_SET_ARM_TASK, ROBOT_API_ID_LOCO_SET_FSM_ID,
             ROBOT_API_ID_LOCO_SET_VELOCITY)
         from unitree_sdk2py.rpc.server import Server
-        from unitree_sdk2py.utils.crc import CRC
 
         self.args = args
         self.Double = Double
         self.new_lowstate = unitree_hg_msg_dds__LowState_
         self.new_odometry = unitree_go_msg_dds__SportModeState_
-        self.crc = CRC()
+        # The CRC of rt/lowstate only with the compiled library of the SDK (else 0): at 100 Hz
+        self.crc = crc_function(compiled_only=True)
         self.lock = threading.Lock()
         self.loco = Locomotion((args.max_vx, args.max_vy, args.max_wz),
                                (args.accel_linear, args.accel_linear, args.accel_angular),
@@ -212,7 +213,7 @@ class R1SdkSim:
         state.imu_state.rpy = [0.0, 0.0, float(yaw)]
         state.imu_state.quaternion = [math.cos(yaw / 2.0), 0.0, 0.0, math.sin(yaw / 2.0)]
         state.imu_state.gyroscope = [0.0, 0.0, float(velocity[2])]
-        state.crc = self.crc.Crc(state)
+        state.crc = self.crc(state) if self.crc else 0
         self.lowstate_pub.Write(state)
         odometry = self.new_odometry()
         odometry.position = [float(positions.get(BASE_X, 0.0)), float(positions.get(BASE_Y, 0.0)),
