@@ -35,6 +35,7 @@ holds them, the arms swing.
 import argparse
 import json
 import math
+import signal
 import threading
 import time
 
@@ -234,6 +235,14 @@ class R1SdkSim:
         odometry.imu_state.quaternion = state.imu_state.quaternion
         self.odometry_pub.Write(odometry)
 
+    def stop(self):
+        """The body still. The joint controllers of Gazebo hold the last velocity they were given:
+        without this, the robot would keep sliding after this program ends."""
+        for _ in range(5):
+            for publisher in self.cmd_vel.values():
+                publisher.publish(self.Double(data=0.0))
+            time.sleep(0.02)
+
     def spin(self):
         period = 1.0 / self.args.rate
         last = time.monotonic()
@@ -259,7 +268,16 @@ def main(argv=None):
     parser.add_argument('--accel-angular', type=float, default=2.0, help='rad/s^2')
     parser.add_argument('--odometry-topic', default='rt/odommodestate')
     args, _ = parser.parse_known_args(argv)   # the ROS arguments of a launch file are ignored
+    # SIGTERM (a launch that escalates) ends it as Ctrl-C does: stopping the body first
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, interrupt)
+    sim = None
     try:
-        R1SdkSim(args).spin()
+        sim = R1SdkSim(args)
+        sim.spin()
     except KeyboardInterrupt:
         pass
+    finally:
+        if sim is not None:
+            sim.stop()
