@@ -42,5 +42,8 @@ ARM_SDK = [
     'waist_yaw_joint', 'head_pitch_joint', 'head_yaw_joint',
 ]
 
+# The joints of the legs: moved by the gait of the simulation (gait.py) while the body walks
+LEGS = [MOTORS[i] for i in range(12)]
+
 # The joints of the simulated body over the floor (not in the robot): the locomotion moves them
 BASE_X, BASE_Y, BODY_YAW = 'base_x_joint', 'base_y_joint', 'body_yaw_joint'

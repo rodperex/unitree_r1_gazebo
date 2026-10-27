@@ -35,18 +35,19 @@ or any world of yours.
 
 | Part | In the simulation |
 |---|---|
-| Walking and turning (`LocoClient`) | The body **slides and turns** at the commanded velocity, reached with limited accelerations (0.8 m/s², 2 rad/s²) and capped (0.8 m/s forward, 0.4 m/s sideways, 1.5 rad/s): the delay of the real controller, not its steps. The legs do not move. Only in the walking state (`Start`, FSM 811, the initial state); `Damp`, `Stance`... stop it |
+| Walking and turning (`LocoClient`) | The body moves and turns at the commanded velocity, reached with limited accelerations (0.8 m/s², 2 rad/s²) and capped (0.8 m/s forward, 0.4 m/s sideways, 1.5 rad/s): the delay of the real controller. The legs **step** with it (an animation, `gait.py`: strides that match the velocity, forward, sideways and turning, a cycle of 1 s; straight legs standing) and the arms swing (unless the arm SDK holds them), but the legs do not carry the body: there is no balance and no physics. Only in the walking state (`Start`, FSM 811, the initial state); `Damp`, `Stance`... stop it |
 | Arms, waist yaw, head (`rt/arm_sdk`) | By position, at most at 2 rad/s (waist 1, head pitch 1.5), blended with the rest pose by the weight (`mode_pr`, 0-100), as on the robot |
-| Joint and IMU state (`rt/lowstate`) | The joints above (the legs and the waist roll at 0), the heading of the body, its yaw rate |
+| Joint and IMU state (`rt/lowstate`) | The joints above (the legs as the gait moves them; the waist roll at 0), the heading of the body, its yaw rate |
 | Odometry (`rt/odommodestate`) | The position and heading of the body from where it started (exact: no drift) |
 | Head camera | RGB-D, 640 × 480, 69° horizontal field of view, 15 Hz (the real one: to be checked) |
 | Physics | None for the robot: it has no gravity and no collisions, and it goes through walls. The objects of the world are as their models say |
 | Hands, audio, low-level control (`rt/lowcmd`), arm actions (`SetTaskId`) | Not simulated (`SetTaskId` is accepted and ignored) |
 
 This is enough to test what a program decides (where the robot looks, how it turns, how it
-approaches someone) with the interface of the real robot. To test walking itself (balance,
-steps, falls), use the official MuJoCo simulator,
-[unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), with a locomotion policy.
+approaches someone) with the interface of the real robot, and to see it walk. To test walking
+itself (balance, steps, falls), a locomotion policy is needed (Unitree publishes none for the
+R1; it can be trained with IsaacLab, as unitree_rl_lab does for the G1) and a simulator with
+physics, such as the official one, [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco).
 
 ## Installation
 

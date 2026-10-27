@@ -81,3 +81,31 @@ def test_the_simulated_robot_moves_only_what_the_firmware_moves():
     description = ET.fromstring(model.description_urdf())
     assert {'base_link', 'pelvis_link', 'camera_link'} <= {l.get('name') for l in description.findall('link')}
     assert 'world' not in {l.get('name') for l in description.findall('link')}
+
+
+def test_the_legs_are_straight_standing_and_step_walking():
+    from unitree_r1_gazebo.gait import Gait
+    gait = Gait()
+    gait.step((0.0, 0.0, 0.0), 0.1)
+    assert all(abs(v) < 1e-9 for v in gait.legs().values())
+    for _ in range(45):   # 2.25 s: a quarter of a cycle into the third, a leg in the air
+        gait.step((0.4, 0.0, 0.0), 0.05)
+    knees = [abs(gait.legs()['left_knee_joint']), abs(gait.legs()['right_knee_joint'])]
+    assert max(knees) > 0.1   # one leg in the air
+    seen = set()
+    for _ in range(40):
+        gait.step((0.4, 0.0, 0.0), 0.05)
+        seen.add(gait.legs()['left_hip_pitch_joint'] < 0)
+    assert seen == {True, False}   # the leg goes in front and behind
+
+
+def test_the_stance_leg_sweeps_back_as_the_body_goes_forward():
+    import math
+    from unitree_r1_gazebo.gait import Gait
+    gait = Gait()
+    gait.amount, gait.velocity = 1.0, (0.4, 0.0, 0.0)
+    gait.phase = math.pi            # the left foot lands, in front
+    front = gait.legs()['left_hip_pitch_joint']
+    gait.phase = 1.9 * math.pi      # late in the stance, behind
+    assert front < 0.0 < gait.legs()['left_hip_pitch_joint']
+    assert gait.legs()['left_knee_joint'] == 0.0   # straight on the floor

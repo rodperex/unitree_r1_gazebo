@@ -25,7 +25,9 @@ Gazebo without a change (only the network interface and the DDS domain differ):
 
 It moves the simulated robot through Gazebo transport (the joints of model.simulation_urdf).
 The locomotion is not the robot's: the body slides and turns, reaching the commanded velocity
-with limited accelerations, which stands for the time the real controller takes.
+with limited accelerations, which stands for the time the real controller takes, while the
+legs step with strides that match its velocity (an animation, gait.py) and, unless the arm SDK
+holds them, the arms swing.
 
     ros2 run unitree_r1_gazebo r1_sdk_sim --interface lo --domain 1
 """
@@ -37,7 +39,8 @@ import threading
 import time
 
 from unitree_r1_gazebo.crc import crc_function
-from unitree_r1_gazebo.joints import ARM_SDK, BASE_X, BASE_Y, BODY_YAW, INDEX, MOTORS
+from unitree_r1_gazebo.gait import Gait
+from unitree_r1_gazebo.joints import ARM_SDK, BASE_X, BASE_Y, BODY_YAW, INDEX, LEGS, MOTORS
 
 # Locomotion states (SetFsmId) in which the robot walks: Start (locomotion mode)
 WALKING_FSM = 811
@@ -124,13 +127,15 @@ class R1SdkSim:
         self.positions, self.velocities = {}, {}
         self.arm_q, self.arm_weight = {}, 0.0
         self.rest = {joint: 0.0 for joint in ARM_SDK}
+        self.gait = Gait()
         self.tick = 0
 
         # Gazebo
         self.gz = GzNode()
         prefix = f'/{args.name}'
         self.gz.subscribe(Model, f'{prefix}/joint_state', self.on_joint_state)
-        self.cmd_pos = {j: self.gz.advertise(f'{prefix}/{j}/cmd_pos', Double) for j in ARM_SDK}
+        self.cmd_pos = {j: self.gz.advertise(f'{prefix}/{j}/cmd_pos', Double)
+                        for j in (*ARM_SDK, *LEGS)}
         self.cmd_vel = {j: self.gz.advertise(f'{prefix}/{j}/cmd_vel', Double)
                         for j in (BASE_X, BASE_Y, BODY_YAW)}
 
@@ -194,7 +199,11 @@ class R1SdkSim:
         with self.lock:
             velocity = self.loco.step(now, dt)
             yaw = self.positions.get(BODY_YAW, 0.0)
-            targets = arm_targets(self.arm_q, self.arm_weight, self.rest)
+            self.gait.step(velocity, dt)
+            # The rest pose of the arms swings with the gait: seen where the arm SDK lets it
+            rest = dict(self.rest, **{j: self.rest[j] + v for j, v in self.gait.arm_swing().items()})
+            targets = arm_targets(self.arm_q, self.arm_weight, rest)
+            targets.update(self.gait.legs())
             positions, velocities = dict(self.positions), dict(self.velocities)
         vx, vy, wz = world_velocity(velocity, yaw)
         for joint, value in ((BASE_X, vx), (BASE_Y, vy), (BODY_YAW, wz)):

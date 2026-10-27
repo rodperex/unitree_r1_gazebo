@@ -20,15 +20,16 @@ robots/r1_description, BSD-3-Clause), downloaded once, at a fixed commit, into
                         for robot_state_publisher, in simulation and on the real robot
     simulation_urdf()   the robot for Gazebo (below)
 
-The simulated robot does not walk: its legs are fixed and it has no gravity. What the
-locomotion controller of the real robot does is done by three joints under its body, moved
-with velocities (the commands of LocoClient.Move):
+The simulated robot has no physics (no gravity, no collisions): what the locomotion controller
+of the real robot does is done by three joints under its body, moved with velocities (the
+commands of LocoClient.Move):
 
     base_x_joint, base_y_joint  the body over the floor, in the axes of the world
     body_yaw_joint              the body turning on the spot
 
-and what the arm SDK moves (rt/arm_sdk) by position controllers: the waist yaw, the head (pitch
-and yaw, which carry the camera) and the arms. The head carries an RGB-D camera.
+while its legs step (an animation of the gait, gait.py: they do not carry the body), and what
+the arm SDK moves (rt/arm_sdk) by position controllers: the waist yaw, the head (pitch and yaw,
+which carry the camera) and the arms. The head carries an RGB-D camera.
 
     ros2 run unitree_r1_gazebo fetch_r1_model        # downloads the model (once)
 """
@@ -38,7 +39,7 @@ import re
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from unitree_r1_gazebo.joints import ARM_SDK, BASE_X, BASE_Y, BODY_YAW
+from unitree_r1_gazebo.joints import ARM_SDK, BASE_X, BASE_Y, BODY_YAW, LEGS
 
 UNITREE_COMMIT = '1c300a6127dcf6f998cbeddd372f7c0eddf24d41'
 UNITREE_URL = ('https://raw.githubusercontent.com/unitreerobotics/unitree_ros/'
@@ -49,6 +50,9 @@ CACHE = os.path.expanduser(os.path.join('~', '.cache', 'unitree_r1_gazebo', 'r1_
 # The joints moved by position, with their largest speed (rad/s)
 POSITION_JOINTS = {name: 2.0 for name in ARM_SDK}
 POSITION_JOINTS.update({'waist_yaw_joint': 1.0, 'head_pitch_joint': 1.5, 'head_yaw_joint': 2.0})
+# The legs follow the gait: faster, with a higher gain
+POSITION_JOINTS.update({name: 10.0 for name in LEGS})
+GAINS = {name: 20.0 for name in LEGS}
 # The joints moved by velocity: the body over the floor (m/s) and turning (rad/s), the limits
 # of the locomotion controller of the simulation (sdk_sim)
 VELOCITY_JOINTS = {BASE_X: 1.0, BASE_Y: 1.0, BODY_YAW: 2.0}
@@ -181,7 +185,7 @@ def simulation_urdf(model_dir=None, name='r1'):
         _element(plugin, 'joint_name', joint)
         _element(plugin, 'topic', f'{name}/{joint}/cmd_pos')
         _element(plugin, 'use_velocity_commands', 'true')
-        _element(plugin, 'p_gain', 4.0)
+        _element(plugin, 'p_gain', GAINS.get(joint, 4.0))
         _element(plugin, 'cmd_max', speed)
         _element(plugin, 'cmd_min', -speed)
     for joint in VELOCITY_JOINTS:
