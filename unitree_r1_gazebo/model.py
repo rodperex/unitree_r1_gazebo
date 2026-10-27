@@ -58,6 +58,23 @@ GAINS = {name: 20.0 for name in LEGS}
 VELOCITY_JOINTS = {BASE_X: 1.0, BASE_Y: 1.0, BODY_YAW: 2.0}
 # Height of the pelvis over the floor, standing with straight legs (the soles of the feet)
 PELVIS_HEIGHT = 0.72
+# The colours of the parts (Unitree's URDF paints them white or grey): an approximation of the
+# robot, light shells and dark joints, matched by the start of the link names
+COLOURS = {
+    'shell': (0.82, 0.83, 0.85),
+    'joint': (0.18, 0.19, 0.21),
+    'black': (0.05, 0.05, 0.06),
+}
+PART_COLOURS = [
+    ('camera_link', 'black'), ('imu', 'joint'),
+    ('left_ankle_roll', 'black'), ('right_ankle_roll', 'black'),
+    ('left_ankle', 'joint'), ('right_ankle', 'joint'),
+    ('left_hip_pitch', 'joint'), ('right_hip_pitch', 'joint'),
+    ('left_hip_roll', 'joint'), ('right_hip_roll', 'joint'),
+    ('waist_roll', 'joint'), ('left_shoulder_pitch', 'joint'), ('right_shoulder_pitch', 'joint'),
+    ('left_wrist', 'joint'), ('right_wrist', 'joint'),
+    ('', 'shell'),
+]
 # The camera of the head. The real one: to be checked on the robot
 CAMERA = {'width': 640, 'height': 480, 'hfov': 1.2, 'rate': 15}
 
@@ -103,6 +120,13 @@ def _robot(model_dir):
     for link in robot.findall('link'):
         if link.get('name') == 'world':
             robot.remove(link)
+    for link in robot.findall('link'):
+        colour = next(c for prefix, c in PART_COLOURS if link.get('name', '').startswith(prefix))
+        for visual in link.findall('visual'):
+            for material in visual.findall('material'):
+                visual.remove(material)
+            material = _element(visual, 'material', name=f'r1_{colour}')
+            _element(material, 'color', rgba='{} {} {} 1'.format(*COLOURS[colour]))
     _element(robot, 'link', name='base_link')
     pelvis = _element(robot, 'joint', name='base_to_pelvis_joint', type='fixed')
     _element(pelvis, 'origin', xyz=f'0 0 {PELVIS_HEIGHT}', rpy='0 0 0')
